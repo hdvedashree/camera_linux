@@ -1,0 +1,79 @@
+#!/usr/bin/python3 -Es
+
+import subprocess
+import cv2
+import sys
+
+def get_camera_info(index):
+    v4l2_cmd = f'v4l2-ctl --device=/dev/video{index} --all'
+    try:
+        output = subprocess.check_output(v4l2_cmd.split()).decode('utf-8')
+        return output
+    except subprocess.CalledProcessError:
+        return None
+
+def is_ir_camera(info):
+    return "IR Camera" in info
+
+def get_highest_resolution(info):
+    max_width, max_height = 0, 0
+    for line in info.splitlines():
+        if "Width/Height" in line:
+            resolution = line.split(":")[1].strip().split("/")
+            width, height = int(resolution[0]), int(resolution[1])
+            if width * height > max_width * max_height:
+                max_width, max_height = width, height
+    return max_width, max_height
+
+def find_best_camera():
+    available_cameras = []
+    for i in range(10):  # Adjust the range depending on your system
+        info = get_camera_info(i)
+        if info and not is_ir_camera(info):
+            width, height = get_highest_resolution(info)
+            if width and height:
+                available_cameras.append((i, width, height))
+
+    if len(available_cameras) == 0:
+        return None
+
+    # Sort by resolution first, then by index
+    available_cameras.sort(key=lambda x: (x[1] * x[2], x[0]), reverse=True)
+
+    # Return the index of the best camera
+    return available_cameras[0][0]
+
+def main():
+    cap_index = find_best_camera()
+
+    if cap_index is None:
+        print("Error: No suitable camera found.")
+        sys.exit()
+
+    cap = cv2.VideoCapture(cap_index)
+
+    if not cap.isOpened():
+        print(f"Error: Could not open camera {cap_index}.")
+        sys.exit()
+
+    # Set the frame rate (e.g., 30 frames per second)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+
+    while True:
+        ret, frame = cap.read()
+
+        if not ret:
+            print("Error: Could not read frame.")
+            break
+
+        _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
+        sys.stdout.buffer.write(jpeg.tobytes())
+        sys.stdout.buffer.write(b'END_OF_FRAME\n')
+        sys.stdout.flush()
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
+

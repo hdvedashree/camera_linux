@@ -14,7 +14,7 @@ class CameraFeedWrapper {
     final List<int> delimiter = utf8.encode('END_OF_FRAME\n');
 
     try{
-      Process.start('camera_feed', []).then((Process process) {
+      Process.start('assets/script/camera_feed', []).then((Process process) {
         _cameraProcess = process;
 
         process.stdout.listen((List<int> data) async {
